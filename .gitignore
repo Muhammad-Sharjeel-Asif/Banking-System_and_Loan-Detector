@@ -125,4 +125,4 @@ logs/
 # *.pkl filter=lfs diff=lfs merge=lfs -text
 
 
-.qwen
+.qwen/
