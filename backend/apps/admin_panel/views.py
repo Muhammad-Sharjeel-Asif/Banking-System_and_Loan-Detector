@@ -1,6 +1,7 @@
 import os
 import glob
 import pandas as pd
+import datetime
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -159,3 +160,105 @@ class AdminFraudAlertsView(APIView):
         merged = merged.sort_values('flagged_at', ascending=False)
 
         return Response(merged.to_dict(orient='records'), status=status.HTTP_200_OK)
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  PUT /api/admin/loans/{id}/approve/
+# ══════════════════════════════════════════════════════════════════════
+
+LOANS_CSV = os.path.join(DATA_DIR, 'loans.csv')
+
+def get_all_loans():
+    """Read all loans from loans.csv."""
+    try:
+        return pd.read_csv(LOANS_CSV)
+    except Exception:
+        return pd.DataFrame(columns=[
+            'loan_id', 'user_id', 'amount', 'purpose', 'duration_months',
+            'has_collateral', 'asset_description', 'status', 'applied_at',
+            'approved_at', 'ml_score'
+        ])
+
+
+def save_loans(df):
+    """Save loans DataFrame to loans.csv."""
+    df.to_csv(LOANS_CSV, index=False)
+
+
+class AdminLoanApprovalView(APIView):
+    """
+    Admin endpoint to approve or reject loan applications.
+    
+    Only admins can access this endpoint.
+    Updates the loan status and sets the approval timestamp.
+    
+    Note for Mohib (Intern):
+        This view uses PUT method because we're updating an existing resource.
+        The loan ID is passed as a URL parameter (path kwarg).
+    """
+    authentication_classes = [CSVTokenAuthentication]
+    
+    def put(self, request, loan_id):
+        # ── 1. Admin check ─────────────────────────────────────────
+        if not is_admin(request):
+            return Response(
+                {'error': 'Access denied. Admins only.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # ── 2. Get action from request (approve or reject) ─────────
+        action = request.data.get('action')
+        
+        if action not in ['approve', 'reject']:
+            return Response(
+                {'error': "Invalid action. Must be 'approve' or 'reject'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ── 3. Read loans.csv and find the loan ────────────────────
+        df = get_all_loans()
+        
+        if df.empty:
+            return Response(
+                {'error': 'Loan not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Find loan by ID (handle both int and str types)
+        loan_idx = df.index[df['loan_id'].astype(str) == str(loan_id)]
+        
+        if len(loan_idx) == 0:
+            return Response(
+                {'error': 'Loan not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        loan_idx = loan_idx[0]
+        
+        # ── 4. Update loan status ──────────────────────────────────
+        new_status = 'approved' if action == 'approve' else 'rejected'
+        df.loc[loan_idx, 'status'] = new_status
+        
+        # Set approved_at timestamp only if approving
+        if action == 'approve':
+            df.loc[loan_idx, 'approved_at'] = str(datetime.datetime.now())
+        
+        # ── 5. Save back to CSV ────────────────────────────────────
+        save_loans(df)
+        
+        # ── 6. Return updated loan info ────────────────────────────
+        updated_loan = df.loc[loan_idx].to_dict()
+        
+        return Response(
+            {
+                'message': f'Loan {loan_id} has been {new_status}.',
+                'data': {
+                    'loan_id': int(updated_loan['loan_id']),
+                    'user_id': int(updated_loan['user_id']),
+                    'amount': float(updated_loan['amount']),
+                    'status': updated_loan['status'],
+                    'approved_at': updated_loan.get('approved_at', '')
+                }
+            },
+            status=status.HTTP_200_OK
+        )

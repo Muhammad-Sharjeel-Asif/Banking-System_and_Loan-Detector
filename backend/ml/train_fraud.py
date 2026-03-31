@@ -1,82 +1,122 @@
+"""
+Fraud Detection Model Training Script
+
+This script trains an Isolation Forest model on the Kaggle Credit Card Fraud
+dataset to detect anomalous (potentially fraudulent) transactions.
+
+Dataset: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
+
+Author: Sharjeel (as per sharjeel.md assignment)
+
+Usage:
+    cd backend
+    python ml/train_fraud.py
+
+Note for Mohib (Intern):
+    Isolation Forest is an unsupervised anomaly detection algorithm.
+    Unlike classification models, it doesn't need labeled fraud/non-fraud data.
+    It works by isolating observations - anomalies are easier to isolate,
+    so they get shorter path lengths in the decision trees.
+    
+    This is perfect for fraud detection because:
+    1. Fraud is rare (imbalanced data)
+    2. New fraud patterns emerge that weren't in training data
+    3. We want to flag anything "unusual" not just known fraud patterns
+"""
+
 import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report
-from imblearn.over_sampling import SMOTE   # ← pip install imbalanced-learn
 import joblib
 import os
 
-df = pd.read_csv('creditcard.csv')
+# ── Load Kaggle dataset ───────────────────────────────────────────────
+# Download from: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
+# Note: creditcard.csv is large (~150MB), so we use a sample for training
 
-# ── Feature engineering (same as before) ──────────────────────────────
-df['hour']             = (df['Time'] / 3600 % 24).astype(int)
-overall_avg            = df['Amount'].mean()
-df['amount_vs_avg']    = df['Amount'] / overall_avg
-threshold_75           = df['Amount'].quantile(0.75)
-df['is_large_transfer'] = (df['Amount'] > threshold_75).astype(int)
+# Try to load from current directory first, then ml/ folder
+if os.path.exists('creditcard.csv'):
+    csv_path = 'creditcard.csv'
+elif os.path.exists(os.path.join(os.path.dirname(__file__), 'creditcard.csv')):
+    csv_path = os.path.join(os.path.dirname(__file__), 'creditcard.csv')
+else:
+    print("Error: creditcard.csv not found!")
+    print("Please download from: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud")
+    print("Place it in the ml/ folder or run this script from the backend/ directory.")
+    exit(1)
 
-FEATURES = ['Amount', 'hour', 'amount_vs_avg', 'is_large_transfer']
+print("Loading dataset (this may take a moment)...")
 
-X = df[FEATURES]
-y = df['Class']
+# Use a sample for faster training (50,000 records as per sharjeel.md)
+df = pd.read_csv(csv_path).sample(n=50000, random_state=42)
 
-# ── FIX 1: Use ALL fraud cases + more normal cases ─────────────────────
-# Before we used only 5000 normal — now use 10000
-# More data = better learning
-fraud_df  = df[df['Class'] == 1]                        # all 492 fraud
-normal_df = df[df['Class'] == 0].sample(n=10000, random_state=42)
-balanced_df = pd.concat([fraud_df, normal_df]).sample(frac=1, random_state=42)
+print(f"Dataset loaded: {len(df)} records (sampled from full dataset)")
 
-X_balanced = balanced_df[FEATURES]
-y_balanced = balanced_df['Class']
+# ── Feature engineering ───────────────────────────────────────────────
+# As per sharjeel.md, we use:
+# - Amount: Transaction amount in PKR (or USD in Kaggle dataset)
+# - Time: Seconds since first transaction (we'll use this for hour detection)
 
-print(f"Before SMOTE — Fraud: {y_balanced.sum()}, Normal: {len(y_balanced)-y_balanced.sum()}")
+features = ['Amount', 'Time']
+X = df[features]
 
-# ── FIX 2: SMOTE — artificially creates more fraud examples ───────────
-# SMOTE = Synthetic Minority Oversampling Technique
-# It looks at existing fraud cases and generates new similar ones
-# This gives the model many more fraud patterns to learn from
-scaler   = StandardScaler()
-X_scaled = scaler.fit_transform(X_balanced)
+print(f"Features: {features}")
+print(f"Amount range: {X['Amount'].min():.2f} - {X['Amount'].max():.2f}")
+print(f"Time range: {X['Time'].min():.0f} - {X['Time'].max():.0f} seconds")
 
-smote    = SMOTE(random_state=42)
-X_resampled, y_resampled = smote.fit_resample(X_scaled, y_balanced)
+# ── Scale features ────────────────────────────────────────────────────
+# Isolation Forest works better with scaled features
+# StandardScaler transforms data to have mean=0 and std=1
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-print(f"After  SMOTE — Fraud: {y_resampled.sum()}, Normal: {len(y_resampled)-y_resampled.sum()}")
+print("\nFeatures scaled (mean=0, std=1)")
 
-# ── Train/Test split ───────────────────────────────────────────────────
-X_train, X_test, y_train, y_test = train_test_split(
-    X_resampled, y_resampled,
-    test_size  = 0.2,
-    random_state = 42,
-    stratify   = y_resampled
+# ── Train Isolation Forest model ──────────────────────────────────────
+# contamination=0.01: We expect ~1% of data to be anomalies (fraud)
+# This is a hyperparameter you can tune based on your data
+# random_state=42: Fixed seed for reproducibility
+
+model = IsolationForest(
+    contamination=0.01,  # Expected proportion of outliers
+    random_state=42,
+    n_estimators=100,    # Number of trees (same as RandomForest)
+    max_samples='auto'   # Number of samples to draw for each tree
 )
 
-# ── FIX 3: Better model settings ──────────────────────────────────────
-# class_weight balanced  → penalizes missing fraud more than missing normal
-# n_estimators 200       → more trees = more accurate
-# max_depth 10           → prevents overfitting
-model = RandomForestClassifier(
-    n_estimators = 200,       # was 100
-    max_depth    = 10,        # new — prevents overfitting
-    class_weight = 'balanced',
-    random_state = 42,
-    min_samples_leaf = 2      # new — smoother decision boundaries
-)
-model.fit(X_train, y_train)
+model.fit(X_scaled)
 
-# ── Evaluate ───────────────────────────────────────────────────────────
-y_pred = model.predict(X_test)
-print("\n=== Model Performance ===")
-print(classification_report(y_test, y_pred, target_names=['Normal', 'Fraud']))
+print(f"\n=== Model Training Complete ===")
+print(f"Model: IsolationForest with {model.n_estimators} trees")
 
-# ── Save ───────────────────────────────────────────────────────────────
+# ── Evaluate on training data (optional) ──────────────────────────────
+# Note: Isolation Forest is unsupervised, so we can't use accuracy
+# Instead, we check how many samples are flagged as anomalies
+predictions = model.predict(X_scaled)
+anomaly_count = (predictions == -1).sum()  # -1 = anomaly, 1 = normal
+
+print(f"\nAnomaly Detection Results:")
+print(f"  Normal transactions: {(predictions == 1).sum()}")
+print(f"  Anomalies detected: {anomaly_count} ({anomaly_count/len(predictions):.2%})")
+
+# If you have the 'Class' column (ground truth), you can compare:
+if 'Class' in df.columns:
+    actual_fraud = (df['Class'] == 1).sum()
+    print(f"  Actual fraud cases in sample: {actual_fraud} ({actual_fraud/len(df):.2%})")
+
+# ── Save model and scaler ─────────────────────────────────────────────
+# We need to save both the model AND the scaler
+# The scaler is needed to transform new data the same way as training data
+output_path = os.path.join(os.path.dirname(__file__), 'fraud_model.pkl')
+
 joblib.dump({
-    'model':    model,
-    'scaler':   scaler,
-    'features': FEATURES
-}, 'fraud_model.pkl')
+    'model': model,
+    'scaler': scaler,
+    'features': features
+}, output_path)
 
-print("fraud_model.pkl saved!")
+print(f"\n✓ Model saved to: {output_path}")
+print("\nTraining complete!")
+print("\nNote for Mohib (Intern):")
+print("  The saved model will be loaded by apps/loans/ml_model.py")
+print("  It will be used in the detect_fraud() function to flag suspicious transactions.")
