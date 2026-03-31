@@ -1,0 +1,125 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Python / Django
+# ─────────────────────────────────────────────────────────────────────────────
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+/static
+
+# Virtual Environment
+venv/
+.venv/
+ENV/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Machine Learning
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Trained models (optional - commit if small, ignore if large)
+# *.pkl
+# *.h5
+# *.pt
+# *.pth
+
+# ML datasets (ALWAYS ignore - too large)
+*.csv
+!requirements.txt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Frontend (Node.js / React)
+# ─────────────────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Frontend build
+frontend/dist/
+frontend/build/
+.cache/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Environment Variables
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+*.env
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS Files
+# ─────────────────────────────────────────────────────────────────────────────
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Project Specific - Banking System
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Data files (user data, transactions - should not be committed)
+backend/data/*.csv
+backend/data/statements/*.csv
+
+# Keep .gitkeep for folder structure
+!backend/data/.gitkeep
+!backend/data/statements/.gitkeep
+
+# ML datasets (Kaggle downloads - too large for Git)
+backend/ml/loan_data.csv
+backend/ml/creditcard.csv
+backend/ml/loan-train.csv
+backend/ml/loan-test.csv
+
+# Logs
+logs/
+*.log
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Git LFS (if you decide to use it for large files)
+# ─────────────────────────────────────────────────────────────────────────────
+# *.csv filter=lfs diff=lfs merge=lfs -text
+# *.pkl filter=lfs diff=lfs merge=lfs -text
