@@ -17,6 +17,11 @@ STMTS_DIR = os.path.join(DATA_DIR, 'statements')
 
 # ── shared admin check helper ──────────────────────────────────────────
 def is_admin(request):
+    """Check if the authenticated user has admin role."""
+    # Check if user is authenticated via our CSV token auth (returns dict)
+    # Django's AnonymousUser won't be subscriptable
+    if not hasattr(request, 'user') or not isinstance(request.user, dict):
+        return False
     return request.user.get('role') == 'admin'
 
 

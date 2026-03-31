@@ -107,6 +107,13 @@ class LoanApplyView(APIView):
     
     def post(self, request):
         # ── 1. Get authenticated user ──────────────────────────────────
+        # Check if authentication was successful
+        if not hasattr(request, 'user') or not isinstance(request.user, dict):
+            return Response(
+                {'error': 'Authentication required. Please login first.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
         user = request.user  # dict from CSV: { user_id, name, balance, ... }
         user_id = user['user_id']
         user_balance = user['balance']
@@ -209,6 +216,13 @@ class LoanStatusView(APIView):
     
     def get(self, request):
         # ── 1. Get authenticated user ──────────────────────────────────
+        # Check if authentication was successful
+        if not hasattr(request, 'user') or not isinstance(request.user, dict):
+            return Response(
+                {'error': 'Authentication required. Please login first.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
         user = request.user
         user_id = user['user_id']
         
